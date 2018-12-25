@@ -1,1 +1,8 @@
 theme: jekyll-theme-slate
+title: Alberto's blog
+description: Notes about programming projects
+
+# Build settings
+markdown: kramdown
+kramdown:
+  input: GFM
