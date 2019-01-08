@@ -127,3 +127,37 @@ This command retrieves all the rows with the exact <value_looked_for>. If a gene
 select * from <table_name> where <column> like '<general_value>%';
 ```
 In this way all the rows containing <general_value> will be retrieved.
+
+If there is the need to retrieve only certain columns this is the code:
+```
+select <column1>, <column2>, ... from <table_name>;
+```
+It is possible to select certain row only using also the statement `where` as shown before.
+
+### Delete data
+To delete all the data from a database run the following command:
+```
+delete from <table_name>;
+```
+To delete only row under specific condition write:
+```
+delete from <table_name> where <condition>;
+```
+
+### Update data
+It is also possible to update one or more row using the `update` commmand. To do so it is sufficient to write:
+```
+update <table_name> set <data_to_update> where <data_of_rows_to_update>;
+```
+In this way all the rows containing the <data_of_rows_to_update> will be updated with the <data_to_update> automatically.
+
+### Sorting rows
+It is possible to show the rows according to a specific order. This could be done using the following syntax:
+```
+select <columns> from <table_name> order by <column>;
+```
+Adding `asc` or `desc` at the end of the line will show it i ascending or descending order. It is possible to use a nested sorting writing:
+```
+select <columns> from <table_name> order by <column1>, <column2>, <column3>, ...;
+```
+In this way the table will be ordered basing on the <column1>, then these sorted rows will be sorted according to <column2> and so on.
