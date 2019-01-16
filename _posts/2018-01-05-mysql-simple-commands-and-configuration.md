@@ -145,7 +145,7 @@ delete from <table_name> where <condition>;
 ```
 
 ### Update data
-It is also possible to update one or more row using the `update` commmand. To do so it is sufficient to write:
+It is also possible to update one or more row using the `update` command. To do so it is sufficient to write:
 ```
 update <table_name> set <data_to_update> where <data_of_rows_to_update>;
 ```
@@ -161,3 +161,18 @@ Adding `asc` or `desc` at the end of the line will show it i ascending or descen
 select <columns> from <table_name> order by <column1>, <column2>, <column3>, ...;
 ```
 In this way the table will be ordered basing on the <column1>, then these sorted rows will be sorted according to <column2> and so on.
+
+### Time computations
+It is possible to compute time differential with respect to a specific day or to the current day (which can be used as 'curdate()'). To do so and add a column just for the computations write:
+```
+select <columns>, timestampdiff(<parameter>, <column_with_date>, <reference_date>) from <table_name>;
+```
+In this way the differential is computed taking into account the <parameter> inserted (year, month, day) of the <column_with_date> with respect to the <reference_date>. Then the column with the differential is automatically added. It is possible to obtain the data already sorted with the obtained differential just writing:
+```
+select <columns>, timestampdiff(<parameter>, <column_with_date>, <reference_date>) from <table_name> order by timestampdiff(<parameter>, <column_with_date>, <reference_date>);
+```
+
+It is possible to query according to the data of a certain parameter (year, month, day) of the date column as:
+```
+select <columns> from <table_name> where <parameter>(<column_with_date>) = <number_of_reference>;
+```
