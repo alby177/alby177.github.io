@@ -134,8 +134,12 @@ The Raspberry pi will use the server code written in python and then in c++ to c
 
 Arduino will receive and execute the command lighting up the led.
 
+All code files are available inside the `_code` folder of this repository under the homonym folder.
+
 ### Arduino setup
 This is the code used with Arduino to light up the led with the serial command.
+>It can be found as SerialCommand.ino inside the project folder.
+
 ```c++
 int LEDPIN = 13;          // Led pin
 char receivedChar = "";   // Character received through serial
@@ -202,4 +206,73 @@ First of all, the Arduino device id is found as `/dev/ttyACM0`.
 
 As first try, the server is implemented using the python script.
 
-The device this time has been found using the python serial API. 
+#### Python server
+
+> The implemented code can be found as ArduinoSerialComm.py inside the project folder.
+
+The device this time has been found using the python serial API. To do so, a new process checking the device connected to the Pi is launched in order to check for the Arduino connection. This is done looking for the device with the `ttyACM*` name as:
+
+```python
+# Create a process to check Arduino device id
+# *.decode("utf-8") is used for cast the device name output in byte to string
+dev = subprocess.check_output('ls /dev/ttyACM*',shell=True).decode("utf-8")
+```
+If the device is found, the Arduino is connected and the device serial connection is opened using the API provided by the serial module:
+```python
+# The strip function remove the '/n' character from the device id
+ser = serial.Serial(dev.strip(), 9600)
+```
+Now the server is started. The server is created in order to take the commands received from the user and, after checking if they are compliant with the Arduino ones, it sent them to Arduino.
+
+It is a TCP/IP server, so the socket is set up considering all the relevant parameters as:
+```python
+TCP_IP = "192.168.1.17"
+TCP_PORT = 2000
+
+# Create socket and wait for client
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+sock.bind((TCP_IP, TCP_PORT))
+sock.listen(10)
+```
+
+The TCP address is a constant because the Raspberry pi has a static IP set.
+
+The server itself is a muticlient server which creates a new thread on which run each of the client connected to it.
+So the new connection is waited through:
+```python
+# Blocking call, waits to accept a connection
+conn, addr = sock.accept()
+```
+Once the client is connected, it is sent to a new thread. To do so, the `threading.Thread` module has been used:
+```python
+# Start client target
+  Thread(target = client_thread, args = (conn, addr, ser)).start()
+```
+The thread has been provided with the socket address, here passed as `conn`, the address `addr` comprehending both the IP address and the socket number (this data is just for visualization purposes) and the serial port on which connect with Arduino, passed as `ser`.
+
+On the executed thread the commands received command is evaluated and sent to the Arduino if compliant. Before sending it down through the serial port, it is checked if the resource is available. Indeed Arduino is resource shared among all the threads so it can't be accessed by more than one client. So a mutex is used. It allows to lock the resource while it is accessed by a thread.
+
+The implementation is quite simple, the `threading.Lock` module must be imported and only one lock in the main part of the program must be created. It is important not to create a lock inside the thread otherwise it won't provide any protection. The lock is created as:
+```python
+# Create lock object
+lock = Lock()
+```
+Now to prevent from resource access, the `acquire` function is called, locking the resource right before accessing it as:
+```python
+# Lock mutex to prevent from multiple access to Arduino
+if (lock.acquire()):
+.
+.
+.
+```
+The function return if the lock has worked.
+
+Then all the operation on the resource are done and after writing down on the serial port the command, the resource are released again as:
+```python
+# Unlock mutex
+lock.release()
+```
+Now the data sent to Arduino, or the wrong command message, is sent back to the client. If the disconnect message has been received, the client is disconnected and thread is closed.
+
+Doing so, a client, on the same network, connected through the TCP socket can access Arduino and command the LED.
