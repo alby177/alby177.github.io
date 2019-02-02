@@ -276,3 +276,71 @@ lock.release()
 Now the data sent to Arduino, or the wrong command message, is sent back to the client. If the disconnect message has been received, the client is disconnected and thread is closed.
 
 Doing so, a client, on the same network, connected through the TCP socket can access Arduino and command the LED.
+
+#### C++ Server
+> The implemented code can be found as RaspberryServerMulticlient.cpp inside the project folder.
+
+##### Serial port
+The Serial port in C++ is not managed by libraries as it was for the python server. Here the port management should be implmeneted otherwise it won't be possible to write and read from the port.
+
+This has be done building a C++ class named SerialPortManage which is able to handle the port activation and communication.
+> The implementation of the port could be find looking for the [utility repository](https://github.com/alby177/utilities) in which the serial port folder contains the code.
+
+The hardest part is to correctly configure the port. Here the configuration is not made so flexible, the communication baud rate is 9600 and the default communication is made as 8n1. Everything can be changed but here it has been implemented specifically for this application so no customization was allowed. The interfaces for the communication are:
+```C++
+// Constructor for setting the port name
+SerialPortManage port("<port_name>");
+
+// Write buffer on the serial bus
+port.SerialWrite(<pointer_to_buffer>);
+
+// Read from serial port
+std::string text = port.SerialRead();
+```
+
+**It is really important to remember that some time is needed for sent character down the serial bus, so between the SerialWrite and the SerialRead some time must be elapsed otherwise when the read is performed the write will not be finished.**
+
+Another quite important thing is that the SerialRead and the SerialWrite are non-blocking so, if no character is received, the application won't wait for some characters on the serial bus but it will go with the execution.
+
+##### Server
+The server has been again implemented as a multithread object which create a new thread for every client connected to it.
+
+So first of all the serial port is opened as:
+```C++
+SerialPortManage serial("/dev/ttyACM0");
+```
+Then the socket is created and addressed as a TCP one. Then bound and got ready to listen for a new client connecting. In the `while` loop of the client management, the server wait for a client and once it got a new one, it creates a thread and provide it all the data through a custom made structure in which there is:
+```C++
+struct threadData
+{
+    struct sockaddr_in clientData;      // IP client data
+    int clientSock;                     // Client socket address
+    SerialPortManage serialPort;        // Serial port address
+};
+```
+In this way it is possible to communicate with the serial port and to visualize clearly which client is connected to the server.
+
+The structure is passed as a pointer to void when the thread is created
+```C++
+// Create thread
+int rc = pthread_create(&tClient[clientConnected], nullptr, ClientHandle, (void *)dataToSend);
+```
+This is the only way to send something to a specific thread, but it is important to remember that the generated threads and the main process share the same memory stack. The first parameter of the function is the array of thread objects created in order to manage them. Then the second one is a parameter for setting the kind of thread opened and the third one is the function that the thread must execute.
+
+As shown in the picture, as first thing the data structure is reconverted to its original type:
+```C++
+struct threadData *data = (struct threadData*)clientData;
+```
+Then it waits for the data received by the client through the `recv` function and compare it with the standard messages to either know if terminate the thread or it's time to write something to Arduino or if the command sent is invalid. If the server receives the special message `"Muori"`, the server is shutdown disconnecting every client.
+
+It is important to underline that only a limited number of clients can be connected to the server. The number of connected clients is managed through a variable protected by a mutex in order to allow every client created on a thread to decrement automatically the number of clients connected in case of disconnection. It is fundamental to lock this resource otherwise it would be managed in un undefined way, obtaining wrong behaviors.
+```C++
+// Decrease running threads number
+pthread_mutex_lock(&lock);
+
+clientConnected--;
+
+pthread_mutex_unlock(&lock);
+```
+
+It is also important to destroy all the lock and running thread (if there are some) when the application is terminated.   
