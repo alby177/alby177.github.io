@@ -343,4 +343,100 @@ clientConnected--;
 pthread_mutex_unlock(&lock);
 ```
 
-It is also important to destroy all the lock and running thread (if there are some) when the application is terminated.   
+It is also important to destroy all the lock and running thread (if there are some) when the application is terminated.
+
+### UI
+The user interface has been realized using Qt. This framework allows to build easy and customizable applications provided with user interfaces. In this case, a user interface allowing to connect with the server running on the Raspberry Pi has been created and so the user is able to send commands to the Arduino receiving then feedbacks from it.
+> The code can be found inside the UI folder which is contained in the project code folder linked before.
+
+Graphically it is very basic, but it allows to insert the IP address of the Pi and the commands to send do it.
+![Client implemntation](../_images/ClientArduino.png)
+
+The most interesting thing about it is the TcpSocket class which implements the commnication with the Pi server. In particular, it provides quite useful APIs to manage the connections. Another interesting class is the `QSetting` class, which allows to store in memory some settings inserted by the user in order to show them again when the app is reopened.
+
+The `QSetting` class is easy to use, the only constraint to follow is to insert some general settings in the main of the application in this way:
+```C++
+QCoreApplication::setOrganizationName("AlbyHomeDev");
+QCoreApplication::setOrganizationDomain("albyhome.com");
+QCoreApplication::setApplicationName("RasPi Client");
+```
+Once set these parameters and created the object in the header file, a new value can be saved using this function:
+```C++
+settings.setValue("<Configuration_parameter>", <value_to_save>);
+```
+
+So it is convenient to use constants instead of rewriting the configuration parameter strings every time. It is also not necessary to create the QSetting object in the header file, the settings are stored in memory so every time a new setting object is instanced, it accesses the memory and retrieves the settings value stored used other QSetting objects in the code. The values can be then retrieved using:
+```C++
+ settings.value("<Configuration_parameter>", "<default_value>");
+ ```
+
+ Talking about the TcpSocket class, it can be simply employed for open the TCP connection and manage it without effort. Once instanced the QTcpSocket object in the header file as:
+ ```C++
+QTcpSocket socket;
+```
+
+The connection can be simply opened as:
+```C++
+// Open the connection
+socket.connectToHost("<host_address>", <port>);
+
+// Wait for connection established
+if (socket.waitForConnected())
+{
+  ...
+}
+```
+In this way the connection can be verified. A signal named `connected` is also provided to check for connection, so also this method can be used for doing something when the connection is actually established (here it has been used for the disconnection, here the if is sufficient because the function itself waits for 3 seconds before declaring the connection as failed).
+
+Then the communication is managed through these commands:
+```C++
+// Save user data
+QString userData    {ui->messageEdit->text()};
+
+// Send to server data
+socket.write(userData.toUtf8());
+```
+The data is saved inside a QString and then converted to a QByteStream object in order to send it through the socket.
+Then the data is read only when something to read is available using a signal named `readyRead`emitted when there is something on the read data stream:
+```C++
+// Setup read
+connect(&socket, &QTcpSocket::readyRead, [this]()
+{
+   // Read from server
+   QString readData {socket.readAll()};
+
+   // Display data
+   ui->plainTextEdit->insertPlainText("From server: " + readData + "\n");
+});
+
+The signal is connected to a slot provided as lambda function (it requires c++11 standard in Qt which must be set in the .pro file) which read data through the `readAll` instruction.
+
+The disconnection is managed using a signal, because it must be catch when the server disconnect the client, so even if the server is shutdown, the client should be able to manage its interface changing the buttons appareance. This is done in this way:
+```C++
+connect(&socket, &QTcpSocket::disconnected, [this]()
+{
+    // Change button enabled
+    setUI(disconnection);
+
+    // Insert log message
+    ui->plainTextEdit->insertPlainText("Disconnected from server at address: " + (socket.peerAddress()).toString() + "\n");
+
+    disconnectTcp();
+});
+
+The signal is caught and it allows to modify the user interface and to effectively disconnect it through the `disconnectTcp`function which check for the established connection, if still established, and delete it:
+```C++
+// Check for client connected
+if (socket.state() == QTcpSocket::ConnectedState)
+{
+    // Send to server data for disconnection
+    socket.write(QString("Disconnect").toUtf8());
+
+    // Disconnect client
+    socket.disconnectFromHost();
+}
+```
+
+Here the disconnection is a little bit customized because the server release the client when it receives the "Disconnect" message. So, a signal has been connected to the Disconnect push button click in order to send the disconnection string and release the client. Then through the `disconnectFromHost`function, the client cut the connection with the server.
+
+This is basically all the code involved in the realization of this simple system connecting the PC with the Raspberry Pi - Arduino system.
